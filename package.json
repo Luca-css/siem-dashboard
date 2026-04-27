@@ -1,0 +1,13 @@
+{
+  "name": "siem-dashboard",
+  "version": "2.0.0",
+  "description": "Real-time SIEM dashboard — Node.js + WebSocket",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "ws": "^8.13.0"
+  }
+}

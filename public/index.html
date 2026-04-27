@@ -1,0 +1,182 @@
+<!DOCTYPE html><html lang="pt-BR"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIEM Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#020c1b;color:#c9d1d9;min-height:100vh}
+:root{--cyan:#00d4ff;--red:#ef4444;--bg2:#0a1628;--bg3:#0d1f35;--muted:#484f58}
+header{background:linear-gradient(90deg,#020c1b,#0a1628);border-bottom:1px solid #00d4ff22;
+  padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-size:1rem;font-weight:700;letter-spacing:.1em;color:var(--cyan)}
+.logo span{color:#fff}
+#ws-status{font-size:.72rem;padding:4px 10px;border-radius:20px;background:#0a2a0a;color:#4ade80;border:1px solid #4ade8044}
+#ws-status.off{background:#2a0a0a;color:var(--red);border-color:#ef444444}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat{background:var(--bg2);border:1px solid #ffffff0a;border-radius:10px;padding:18px 20px;
+  border-top:2px solid var(--cyan)}
+.stat.danger{border-top-color:var(--red)}
+.stat-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
+.stat-value{font-size:2rem;font-weight:700;color:#fff}
+.stat-value.red{color:var(--red)}
+.grid2{display:grid;grid-template-columns:1fr 340px;gap:14px;margin-bottom:14px}
+.card{background:var(--bg2);border:1px solid #ffffff0a;border-radius:10px;padding:18px}
+.card-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--cyan);margin-bottom:14px}
+table{width:100%;border-collapse:collapse;font-size:.76rem}
+th{text-align:left;padding:8px 10px;color:var(--muted);font-weight:500;border-bottom:1px solid #ffffff08}
+td{padding:7px 10px;border-bottom:1px solid #ffffff05;font-family:monospace}
+tr:hover td{background:#0d1f35}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.66rem;font-weight:600}
+.badge-critical{background:#7f1d1d;color:#fca5a5}
+.badge-high{background:#7c2d12;color:#fdba74}
+.badge-medium{background:#713f12;color:#fde68a}
+.badge-info{background:#0c2a4a;color:var(--cyan)}
+.badge-success{background:#052e16;color:#86efac}
+.alert-item{padding:10px 12px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--red);
+  background:#1a0a0a;cursor:pointer;transition:.2s}
+.alert-item:hover{background:#220d0d}
+.alert-item.resolved{opacity:.4;border-left-color:var(--muted)}
+.alert-title{font-size:.8rem;font-weight:600;color:#fca5a5;margin-bottom:3px}
+.alert-detail{font-size:.72rem;color:var(--muted)}
+.alert-time{font-size:.68rem;color:var(--muted);margin-top:4px}
+.alert-sev-High .alert-title{color:#fdba74}
+.alert-sev-High{border-left-color:#f97316}
+.alert-sev-Medium .alert-title{color:#fde68a}
+.alert-sev-Medium{border-left-color:#eab308}
+canvas{display:block;width:100%}
+.chart-wrap{margin-top:8px}
+#alert-count{background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:6px}
+</style></head><body>
+<header>
+  <div class="logo">_ <span>SIEM</span> Dashboard</div>
+  <div id="ws-status" class="off">⬤ Conectando...</div>
+</header>
+<div class="container">
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Total Eventos</div><div class="stat-value" id="s-total">0</div></div>
+    <div class="stat danger"><div class="stat-label">Alertas Ativos</div><div class="stat-value red" id="s-alerts">0</div></div>
+    <div class="stat danger"><div class="stat-label">Falhas de Login</div><div class="stat-value red" id="s-failures">0</div></div>
+    <div class="stat"><div class="stat-label">Hosts Monitorados</div><div class="stat-value" id="s-hosts">0</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">Eventos Recentes</div>
+      <table>
+        <thead><tr><th>Timestamp</th><th>ID</th><th>Tipo</th><th>Host</th><th>Usuário</th><th>IP Origem</th></tr></thead>
+        <tbody id="events-body"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-title">Alertas Ativos <span id="alert-count">0</span></div>
+      <div id="alerts-list"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Eventos por Hora (últimas 24h)</div>
+    <div class="chart-wrap"><canvas id="chart" height="80"></canvas></div>
+  </div>
+</div>
+
+<script>
+const WS_URL = `ws://${location.host}`
+let ws, events = [], alerts = [], stats = {}
+
+function connect() {
+  ws = new WebSocket(WS_URL)
+  ws.onopen = () => {
+    document.getElementById('ws-status').textContent = '⬤ Conectado'
+    document.getElementById('ws-status').classList.remove('off')
+  }
+  ws.onclose = () => {
+    document.getElementById('ws-status').textContent = '⬤ Desconectado'
+    document.getElementById('ws-status').classList.add('off')
+    setTimeout(connect, 3000)
+  }
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data)
+    if (d.events) events = d.events
+    if (d.alerts) alerts = d.alerts
+    if (d.stats)  stats  = d.stats
+    render()
+  }
+}
+
+function sevBadge(sev) {
+  const map = { Critical:'badge-critical', High:'badge-high', Medium:'badge-medium' }
+  return `<span class="badge ${map[sev]||'badge-info'}">${sev}</span>`
+}
+
+function eventBadge(id) {
+  if (id===4625) return `<span class="badge badge-critical">Login Falha</span>`
+  if (id===4624) return `<span class="badge badge-success">Login OK</span>`
+  if (id===4672) return `<span class="badge badge-high">Privilégio</span>`
+  if (id===4688) return `<span class="badge badge-info">Processo</span>`
+  return `<span class="badge badge-info">${id}</span>`
+}
+
+function render() {
+  document.getElementById('s-total').textContent    = stats.totalEvents || 0
+  document.getElementById('s-alerts').textContent   = stats.activeAlerts || 0
+  document.getElementById('s-failures').textContent = stats.loginFailures || 0
+  document.getElementById('s-hosts').textContent    = stats.monitoredHosts || 0
+  document.getElementById('alert-count').textContent = alerts.filter(a=>!a.resolved).length
+
+  const tbody = document.getElementById('events-body')
+  tbody.innerHTML = events.slice(0,30).map(e => `
+    <tr>
+      <td>${e.time||''}</td>
+      <td>${e.eventId||''}</td>
+      <td>${eventBadge(e.eventId)}</td>
+      <td>${e.host||'-'}</td>
+      <td>${e.user||'-'}</td>
+      <td>${e.srcIp||'-'}</td>
+    </tr>`).join('')
+
+  const active = alerts.filter(a=>!a.resolved)
+  document.getElementById('alerts-list').innerHTML = active.length
+    ? active.slice(0,15).map(a => `
+      <div class="alert-item alert-sev-${a.severity}" onclick="resolveAlert(${a.id})">
+        <div class="alert-title">${sevBadge(a.severity)} ${a.title}</div>
+        <div class="alert-detail">${a.detail||''}</div>
+        <div class="alert-time">${a.time?.slice(0,19)||''} · clique para resolver</div>
+      </div>`).join('')
+    : '<div style="color:#484f58;font-size:.8rem;padding:12px 0">Nenhum alerta ativo</div>'
+
+  drawChart()
+}
+
+function resolveAlert(id) {
+  fetch(`/api/alerts/${id}/resolve`, { method:'POST' })
+    .then(r=>r.json()).then(()=>{ const a=alerts.find(a=>a.id===id); if(a) a.resolved=true; render() })
+}
+
+function drawChart() {
+  const canvas = document.getElementById('chart')
+  const ctx    = canvas.getContext('2d')
+  const W = canvas.offsetWidth; canvas.width = W; canvas.height = 80
+  const byHour = stats.byHour || {}
+  const hours  = Array.from({length:24},(_,i)=>i)
+  const vals   = hours.map(h => byHour[h] || 0)
+  const max    = Math.max(...vals, 1)
+  ctx.clearRect(0,0,W,80)
+  const bw = W / 24 - 2
+  vals.forEach((v,i) => {
+    const h = Math.max(2, (v/max)*60)
+    const x = i*(W/24) + 1
+    ctx.fillStyle = v > 0 ? '#00d4ff44' : '#ffffff08'
+    ctx.fillRect(x, 70-h, bw, h)
+    if (v > 0) {
+      ctx.fillStyle = '#00d4ff'
+      ctx.fillRect(x, 70-h, bw, 2)
+    }
+  })
+  ctx.fillStyle = '#484f58'
+  ctx.font = '9px monospace'
+  ;[0,6,12,18,23].forEach(h => ctx.fillText(h+'h', h*(W/24)+2, 79))
+}
+
+connect()
+</script>
+</body></html>
