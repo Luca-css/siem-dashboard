@@ -1,0 +1,15 @@
+# Many failed logons from one source IP in a short window.
+# Category auth_failure covers Windows 4625 *and* sshd "Failed password" lines.
+id: brute_force_by_ip
+name: Brute force (failed logons from one IP)
+type: threshold
+severity: critical
+mitre: [T1110]
+match:
+  category: auth_failure
+exclude:
+  src_ip: ["127.0.0.1", "::1"]
+group_by: [src_ip]
+threshold: 5
+window: 5m
+title: "Brute force: {count} failed logons from {src_ip}"

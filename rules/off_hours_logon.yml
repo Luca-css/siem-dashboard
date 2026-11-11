@@ -1,0 +1,17 @@
+# Interactive / RDP / SSH logon outside business hours.
+# Network (3) and service (5) logons are excluded: they happen all day long.
+id: logon_off_hours
+name: Logon outside business hours
+type: off_hours
+severity: medium
+mitre: [T1078]
+match:
+  category: auth_success
+exclude:
+  logon_type: [3, 5]
+  user: ["SYSTEM", "*$"]
+timezone: America/Sao_Paulo
+start: "08:00"
+end: "19:00"
+days: [mon, tue, wed, thu, fri]
+title: "Off-hours logon by {user} on {host}"

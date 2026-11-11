@@ -1,0 +1,20 @@
+# 4672 "Special privileges assigned to new logon" for an account that is not
+# a known administrator or built-in service identity.
+id: privilege_use_non_admin
+name: Special privileges assigned to non-admin account
+type: match
+severity: high
+mitre: [T1078]
+match:
+  event_id: 4672
+exclude:
+  user:
+    - "Administrator"
+    - "adm.*"          # naming convention for admin accounts
+    - "SYSTEM"
+    - "LOCAL SERVICE"
+    - "NETWORK SERVICE"
+    - "DWM-*"
+    - "UMFD-*"
+    - "*$"             # computer accounts
+title: "Special privileges assigned to {user} on {host}"

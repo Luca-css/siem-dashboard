@@ -1,0 +1,244 @@
+<!DOCTYPE html><html lang="pt-BR"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SIEM Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--cyan:#00d4ff;--red:#ef4444;--orange:#f97316;--yellow:#eab308;--bg:#020c1b;--bg2:#0a1628;--bg3:#0d1f35;--muted:#6b7480;--text:#c9d1d9}
+body{font-family:'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{background:linear-gradient(90deg,#020c1b,#0a1628);border-bottom:1px solid #00d4ff22;
+  padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-size:1rem;font-weight:700;letter-spacing:.1em;color:var(--cyan);font-family:monospace}
+.logo span{color:#fff}
+.cursor{animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+#ws-status{font-size:.72rem;padding:4px 10px;border-radius:20px;background:#0a2a0a;color:#4ade80;border:1px solid #4ade8044}
+#ws-status.off{background:#2a0a0a;color:var(--red);border-color:#ef444444}
+.container{max-width:1400px;margin:0 auto;padding:20px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr!important}}
+.stat{background:var(--bg2);border:1px solid #ffffff0a;border-radius:10px;padding:18px 20px;border-top:2px solid var(--cyan)}
+.stat.danger{border-top-color:var(--red)}
+.stat-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
+.stat-value{font-size:2rem;font-weight:700;color:#fff;font-family:monospace}
+.stat-value.red{color:var(--red)}
+.grid2{display:grid;grid-template-columns:1fr 380px;gap:14px;margin-bottom:14px}
+.card{background:var(--bg2);border:1px solid #ffffff0a;border-radius:10px;padding:18px;min-width:0}
+.card-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--cyan);margin-bottom:14px;
+  display:flex;align-items:center;justify-content:space-between;gap:8px}
+.table-wrap{overflow-x:auto;max-height:520px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:.76rem}
+th{text-align:left;padding:8px 10px;color:var(--muted);font-weight:500;border-bottom:1px solid #ffffff08;position:sticky;top:0;background:var(--bg2)}
+td{padding:7px 10px;border-bottom:1px solid #ffffff05;font-family:monospace;white-space:nowrap}
+tr:hover td{background:var(--bg3)}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.66rem;font-weight:600;text-transform:uppercase}
+.badge-critical{background:#7f1d1d;color:#fca5a5}
+.badge-high{background:#7c2d12;color:#fdba74}
+.badge-medium{background:#713f12;color:#fde68a}
+.badge-low,.badge-info{background:#0c2a4a;color:var(--cyan)}
+.badge-success{background:#052e16;color:#86efac}
+.badge-mitre{background:#1e1b4b;color:#c4b5fd;margin-left:4px}
+#alerts-list{max-height:520px;overflow-y:auto}
+.alert-item{padding:10px 12px;border-radius:8px;margin-bottom:8px;border-left:3px solid var(--red);
+  background:#1a0a0a;cursor:pointer;transition:background .2s}
+.alert-item:hover{background:#220d0d}
+.alert-item.new{animation:flash 1.2s ease-out}
+@keyframes flash{from{background:#4a1010}to{background:#1a0a0a}}
+.alert-sev-high{border-left-color:var(--orange)}
+.alert-sev-medium{border-left-color:var(--yellow)}
+.alert-sev-low{border-left-color:var(--cyan)}
+.alert-title{font-size:.8rem;font-weight:600;color:#fca5a5;margin-bottom:3px}
+.alert-sev-high .alert-title{color:#fdba74}
+.alert-sev-medium .alert-title{color:#fde68a}
+.alert-sev-low .alert-title{color:var(--cyan)}
+.alert-detail{font-size:.72rem;color:var(--muted)}
+.alert-time{font-size:.68rem;color:var(--muted);margin-top:4px;font-family:monospace}
+.empty{color:var(--muted);font-size:.8rem;padding:12px 0}
+select{background:var(--bg3);color:var(--text);border:1px solid #00d4ff33;border-radius:4px;font-size:.7rem;padding:2px 6px}
+#alert-count{background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:6px}
+canvas{display:block;width:100%}
+</style></head><body>
+<header>
+  <div class="logo">&gt;_ <span>SIEM</span> Dashboard<span class="cursor">_</span></div>
+  <div id="ws-status" class="off">⬤ Conectando...</div>
+</header>
+<div class="container">
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Total de eventos</div><div class="stat-value" id="s-total">0</div></div>
+    <div class="stat danger"><div class="stat-label">Alertas abertos</div><div class="stat-value red" id="s-alerts">0</div></div>
+    <div class="stat danger"><div class="stat-label">Falhas de login</div><div class="stat-value red" id="s-failures">0</div></div>
+    <div class="stat"><div class="stat-label">Hosts vistos</div><div class="stat-value" id="s-hosts">0</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">Eventos recentes</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Timestamp</th><th>ID</th><th>Categoria</th><th>Host</th><th>Usuário</th><th>IP origem</th></tr></thead>
+          <tbody id="events-body"><tr><td colspan="6" class="empty">Aguardando eventos...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">
+        <span>Alertas abertos <span id="alert-count">0</span></span>
+        <select id="sev-filter" aria-label="Filtrar por severidade">
+          <option value="">todas</option>
+          <option value="critical">critical</option>
+          <option value="high">high</option>
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+        </select>
+      </div>
+      <div id="alerts-list"><div class="empty">Nenhum alerta aberto</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Eventos por hora (últimas 24h, horário local)</div>
+    <canvas id="chart" height="90"></canvas>
+  </div>
+</div>
+
+<script>
+// Everything rendered below comes from logs an attacker can influence
+// (usernames, hostnames...), so it is always HTML-escaped before insertion.
+const esc = v => String(v ?? '-').replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+
+const CATEGORY_BADGE = {
+  auth_failure:['badge-critical','Login falha'], auth_success:['badge-success','Login OK'],
+  privilege_use:['badge-high','Privilégio'], group_member_added:['badge-high','Grupo +membro'],
+  account_created:['badge-info','Conta criada'], account_locked:['badge-critical','Bloqueio'],
+  other:['badge-info','Outro'],
+}
+
+let alerts = []            // open alerts currently displayed (newest first)
+let stats = {}
+const fmtTime = iso => iso ? new Date(iso).toLocaleString('pt-BR') : '-'
+
+async function getJSON(url, opts) {
+  const r = await fetch(url, opts)
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`)
+  return r.json()
+}
+
+// ── WebSocket: new alerts are pushed by the server ──────────────────────────
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  const ws = new WebSocket(`${proto}://${location.host}/ws/alerts`)
+  const status = document.getElementById('ws-status')
+  ws.onopen = () => { status.textContent = '⬤ Ao vivo'; status.classList.remove('off'); loadAlerts() }
+  ws.onclose = () => { status.textContent = '⬤ Desconectado'; status.classList.add('off'); setTimeout(connect, 3000) }
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data)
+    if (msg.type !== 'alert') return
+    const filter = document.getElementById('sev-filter').value
+    if (!filter || msg.data.severity === filter) {
+      alerts.unshift({...msg.data, _new: true})
+      alerts = alerts.slice(0, 100)
+    }
+    stats.open_alerts = (stats.open_alerts || 0) + 1
+    renderAlerts(); renderStats()
+  }
+}
+
+// ── REST: initial alert list, periodic stats/events refresh ─────────────────
+async function loadAlerts() {
+  const sev = document.getElementById('sev-filter').value
+  const qs = new URLSearchParams({status: 'open', limit: '100'})
+  if (sev) qs.append('severity', sev)
+  const page = await getJSON(`/alerts?${qs}`)
+  alerts = page.items
+  renderAlerts()
+}
+
+async function refresh() {
+  try {
+    const [s, events] = await Promise.all([getJSON('/stats'), getJSON('/events?limit=40')])
+    stats = s
+    renderStats(); renderEvents(events); drawChart()
+  } catch (err) { console.error(err) }
+}
+
+async function ackAlert(id) {
+  await getJSON(`/alerts/${id}/ack`, {method: 'POST'})
+  alerts = alerts.filter(a => a.id !== id)
+  stats.open_alerts = Math.max(0, (stats.open_alerts || 1) - 1)
+  renderAlerts(); renderStats()
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+function renderStats() {
+  document.getElementById('s-total').textContent    = stats.total_events ?? 0
+  document.getElementById('s-alerts').textContent   = stats.open_alerts ?? 0
+  document.getElementById('s-failures').textContent = stats.events_by_category?.auth_failure ?? 0
+  document.getElementById('s-hosts').textContent    = stats.hosts ?? 0
+}
+
+function renderEvents(events) {
+  const tbody = document.getElementById('events-body')
+  if (!events.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum evento ainda. Rode scripts/simulate.py</td></tr>'; return }
+  tbody.innerHTML = events.map(e => {
+    const [cls, label] = CATEGORY_BADGE[e.category] || CATEGORY_BADGE.other
+    return `<tr>
+      <td>${esc(fmtTime(e.timestamp))}</td>
+      <td>${esc(e.event_id ?? e.source)}</td>
+      <td><span class="badge ${cls}">${label}</span></td>
+      <td>${esc(e.host)}</td>
+      <td>${esc(e.user)}</td>
+      <td>${esc(e.src_ip)}</td>
+    </tr>`}).join('')
+}
+
+function renderAlerts() {
+  document.getElementById('alert-count').textContent = alerts.length
+  const list = document.getElementById('alerts-list')
+  if (!alerts.length) { list.innerHTML = '<div class="empty">Nenhum alerta aberto</div>'; return }
+  list.innerHTML = alerts.map(a => `
+    <div class="alert-item alert-sev-${esc(a.severity)}${a._new ? ' new' : ''}" data-id="${Number(a.id)}" title="Clique para reconhecer (ack)">
+      <div class="alert-title"><span class="badge badge-${esc(a.severity)}">${esc(a.severity)}</span> ${esc(a.title)}</div>
+      <div class="alert-detail">${esc(a.description)}${(a.mitre || []).map(t => `<span class="badge badge-mitre">${esc(t)}</span>`).join('')}</div>
+      <div class="alert-time">#${Number(a.id)} · ${esc(fmtTime(a.last_seen))} · ${esc(a.rule_id)}</div>
+    </div>`).join('')
+  alerts.forEach(a => delete a._new)
+}
+
+function drawChart() {
+  const canvas = document.getElementById('chart')
+  const ctx = canvas.getContext('2d')
+  const W = canvas.offsetWidth, H = 90
+  canvas.width = W; canvas.height = H
+  // 24 one-hour buckets ending at the current hour; server buckets are UTC hours.
+  const counts = new Map((stats.events_per_hour || []).map(b => [new Date(b.hour).getTime(), b.count]))
+  const end = new Date(); end.setMinutes(0, 0, 0)
+  const buckets = Array.from({length: 24}, (_, i) => {
+    const t = end.getTime() - (23 - i) * 3600e3
+    return {hour: new Date(t).getHours(), count: counts.get(t) || 0}
+  })
+  const max = Math.max(1, ...buckets.map(b => b.count))
+  const slot = W / 24, bw = slot - 2
+  ctx.clearRect(0, 0, W, H)
+  ctx.font = '9px monospace'
+  buckets.forEach((b, i) => {
+    const h = Math.max(2, (b.count / max) * 66)
+    const x = i * slot + 1
+    ctx.fillStyle = b.count ? '#00d4ff44' : '#ffffff08'
+    ctx.fillRect(x, 76 - h, bw, h)
+    if (b.count) { ctx.fillStyle = '#00d4ff'; ctx.fillRect(x, 76 - h, bw, 2) }
+    if (i % 3 === 0) { ctx.fillStyle = '#6b7480'; ctx.fillText(b.hour + 'h', x, 88) }
+  })
+}
+
+document.getElementById('alerts-list').addEventListener('click', e => {
+  const item = e.target.closest('.alert-item')
+  if (item) ackAlert(Number(item.dataset.id)).catch(console.error)
+})
+document.getElementById('sev-filter').addEventListener('change', () => loadAlerts().catch(console.error))
+window.addEventListener('resize', drawChart)
+
+connect()
+refresh()
+setInterval(refresh, 3000)
+</script>
+</body></html>

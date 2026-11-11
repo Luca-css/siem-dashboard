@@ -1,0 +1,11 @@
+# 4732 "A member was added to a security-enabled local group" where the group
+# is the local Administrators group.
+id: new_local_admin
+name: Member added to local Administrators
+type: match
+severity: high
+mitre: [T1098]
+match:
+  event_id: 4732
+  target: ["Administrators", "Administradores"]   # English / pt-BR Windows
+title: "New local admin on {host} (added by {user})"

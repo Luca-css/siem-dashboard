@@ -1,0 +1,21 @@
+services:
+  siem:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - siem-data:/app/data
+      - ./rules:/app/rules:ro   # edit rules without rebuilding (restart to reload)
+    restart: unless-stopped
+
+  # Optional demo traffic: docker compose --profile demo up
+  simulator:
+    build: .
+    profiles: ["demo"]
+    command: ["python", "scripts/simulate.py", "--url", "http://siem:8000"]
+    depends_on:
+      siem:
+        condition: service_healthy
+
+volumes:
+  siem-data:
